@@ -12,7 +12,7 @@ export function StreakCard({ api }: { api: TransactionsApi }) {
   return (
     <div className="rounded-3xl border bg-card p-5 shadow-soft animate-pop-in flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">No-Spend</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Awareness</p>
         <Flame className="h-4 w-4 text-accent" fill="hsl(var(--accent))" />
       </div>
 
@@ -23,10 +23,10 @@ export function StreakCard({ api }: { api: TransactionsApi }) {
         </div>
         <p className="text-xs text-center text-muted-foreground leading-snug">
           {current === 0
-            ? "Skip tomorrow to start a streak"
-            : current >= best
-            ? "Personal best! Keep going 🔥"
-            : `Best: ${best} days`}
+            ? "Log an expense to start your streak"
+            : current >= best && current > 0
+            ? "You're consistently aware! 🔥"
+            : `Best tracking streak: ${best} days`}
         </p>
       </div>
     </div>

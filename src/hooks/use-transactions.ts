@@ -7,10 +7,12 @@ export function useTransactions() {
   const [benchmarks, setBenchmarks] = useState<Benchmarks>(() => storage.loadBenchmarks());
   const [startMs] = useState<number>(() => storage.loadStart());
   const [goals, setGoals] = useState<Goal[]>(() => storage.loadGoals());
+  const [balance, setBalance] = useState<number>(() => storage.loadBalance());
 
   useEffect(() => { storage.saveTx(tx); }, [tx]);
   useEffect(() => { storage.saveBenchmarks(benchmarks); }, [benchmarks]);
   useEffect(() => { storage.saveGoals(goals); }, [goals]);
+  useEffect(() => { storage.saveBalance(balance); }, [balance]);
 
   const add = useCallback((amount: number, category: CategoryId, note?: string, mood?: string) => {
     const t: Transaction = { id: uid(), amount, category, note, mood, ts: Date.now() };
@@ -43,11 +45,15 @@ export function useTransactions() {
     setGoals((cur) => cur.filter((g) => g.id !== id));
   }, []);
 
+  const addBalance = useCallback((amount: number) => {
+    setBalance((cur) => cur + amount);
+  }, []);
+
   return useMemo(() => ({
-    tx, benchmarks, startMs, goals,
+    tx, benchmarks, startMs, goals, balance,
     add, remove, recategorize, setBenchmark,
-    addGoal, updateGoal, removeGoal
-  }), [tx, benchmarks, startMs, goals, add, remove, recategorize, setBenchmark, addGoal, updateGoal, removeGoal]);
+    addGoal, updateGoal, removeGoal, addBalance
+  }), [tx, benchmarks, startMs, goals, balance, add, remove, recategorize, setBenchmark, addGoal, updateGoal, removeGoal, addBalance]);
 }
 
 export type TransactionsApi = ReturnType<typeof useTransactions>;

@@ -49,3 +49,37 @@ export type Benchmarks = Record<CategoryId, number>;
 export const DEFAULT_BENCHMARKS: Benchmarks = {
   food: 150, travel: 80, shopping: 200, random: 80,
 };
+
+// ── Friends Module Types ──────────────────────────────────────────────────────
+
+export type Person = {
+  id: string;
+  name: string;
+  createdAt: number;     // epoch ms
+  lastActivityAt: number; // epoch ms – used for sorting
+};
+
+export type Repayment = {
+  id: string;
+  amount: number;
+  date: number;           // epoch ms
+  note?: string;
+};
+
+export type LendBorrowEntry = {
+  id: string;
+  personId: string;
+  type: "lent" | "borrowed";
+  amount: number;          // original amount
+  reason?: string;
+  note?: string;
+  expectedReturnMs?: number;
+  createdAt: number;
+  repayments: Repayment[];
+  settled: boolean;
+};
+
+export const QUICK_REASONS = [
+  "Lunch", "Dinner", "Books", "Trip", "Cab",
+  "Hostel Fee", "Shopping", "Coffee", "Movie", "Groceries",
+] as const;

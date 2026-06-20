@@ -28,26 +28,32 @@ export function QuickLog({ api }: { api: TransactionsApi }) {
     }
   }, [nlpInput]);
 
-  const handlePad = (k: string) => {
-    setAmount((v) => {
-      if (k === "del") return v.slice(0, -1);
-      if (k === "." && v.includes(".")) return v;
-      if (v === "0" && k !== ".") return k;
-      const next = v + k;
-      const [, dec] = next.split(".");
-      if (dec && dec.length > 2) return v;
-      if (next.length > 8) return v;
-      return next;
-    });
-  };
+
 
   const submit = (chosen?: CategoryId) => {
-    const c = chosen ?? cat;
+    const c = chosen ?? cat ?? "random"; // default to random if AI doesn't guess
     const n = Number(amount);
-    if (!c || !n || n <= 0) return;
+    if (!n || n <= 0) return;
     const newTx = api.add(n, c, note, mood);
-    toast.success(`Logged ${mood} · ${CATEGORIES.find((x) => x.id === c)!.label}`, {
-      description: `₹${n.toFixed(n % 1 ? 2 : 0)} ${note ? `"${note}"` : ""}`,
+    
+    // AI Insights logic
+    const thisWeek = api.tx.filter(t => t.ts > Date.now() - 7 * 86400000 && t.category === c);
+    const count = thisWeek.length + 1;
+    let msg = `Logged ₹${n}`;
+    let desc = `Nice!`;
+
+    if (c === "food") {
+      desc = count > 2 ? `That's your ${count}th food order this week 👀` : "Enjoy your food!";
+    } else if (c === "shopping") {
+      desc = "Retail therapy? 🛍️";
+    } else if (n > 500) {
+      desc = "Big spender! 💸";
+    } else {
+      desc = "Awareness +1 ✨";
+    }
+
+    toast.success(msg, {
+      description: desc,
     });
     reset();
     setOpen(false);
@@ -60,7 +66,7 @@ export function QuickLog({ api }: { api: TransactionsApi }) {
       <SheetTrigger asChild>
         <button
           aria-label="Quick log expense"
-          className="absolute bottom-[calc(var(--nav-height)+max(var(--safe-bottom),0px)+12px)] right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-accent text-accent-foreground shadow-lift animate-pulse-ring transition-transform active:scale-95 hover:scale-105"
+          className="fixed bottom-[96px] right-6 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#10b981] text-white shadow-lift transition-transform active:scale-95 hover:scale-105 animate-bounce"
         >
           <Plus className="h-6 w-6" strokeWidth={2.5} />
         </button>
@@ -71,68 +77,32 @@ export function QuickLog({ api }: { api: TransactionsApi }) {
         </SheetHeader>
 
         <div className="px-6 pb-6 space-y-4">
-          <input
-            type="text"
-            placeholder='Type "spent 120 on lunch"'
+          <textarea
+            autoFocus
+            placeholder='e.g. "Spent 120 on shawarma"'
             value={nlpInput}
             onChange={(e) => setNlpInput(e.target.value)}
-            className="w-full rounded-xl border bg-secondary/50 px-4 py-3 text-sm outline-none focus:border-foreground transition-colors"
+            className="w-full rounded-2xl border bg-secondary/30 px-5 py-4 text-lg outline-none focus:border-foreground transition-colors resize-none h-32 placeholder:text-muted-foreground/50"
           />
 
-          <div className="flex items-baseline justify-center gap-1 py-2">
-            <span className="font-display text-4xl text-muted-foreground">₹</span>
-            <span className="font-display text-7xl tabular tracking-tight">{display}</span>
-          </div>
-
-          {/* Categories */}
-          <div className="grid grid-cols-4 gap-2">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => { setCat(c.id); if (amount) submit(c.id); }}
-                className={cn(
-                  "group flex flex-col items-center gap-1.5 rounded-2xl border bg-card p-3 transition-all active:scale-95",
-                  cat === c.id ? "border-foreground shadow-soft" : "hover:border-foreground/40"
-                )}
-                style={cat === c.id ? { backgroundColor: `hsl(var(${c.colorVar}) / 0.12)` } : undefined}
-              >
-                <span className="text-2xl">{c.emoji}</span>
-                <span className="text-xs font-medium">{c.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="flex gap-2 justify-center py-1">
+          <div className="flex gap-2 justify-center py-2">
             {MOODS.map(m => (
               <button
                 key={m}
                 onClick={() => setMood(m === mood ? "" : m)}
-                className={cn("text-2xl transition-transform active:scale-90", mood === m ? "scale-125" : "opacity-50 hover:opacity-100")}
+                className={cn("text-3xl transition-transform active:scale-90", mood === m ? "scale-110 drop-shadow-md" : "opacity-40 hover:opacity-100 grayscale hover:grayscale-0")}
               >
                 {m}
               </button>
             ))}
           </div>
 
-          {/* Number pad */}
-          <div className="grid grid-cols-3 gap-2">
-            {["1","2","3","4","5","6","7","8","9",".","0","del"].map((k) => (
-              <button
-                key={k}
-                onClick={() => handlePad(k)}
-                className="rounded-2xl bg-secondary py-4 text-2xl font-medium tabular transition-colors hover:bg-muted active:scale-[0.98]"
-              >
-                {k === "del" ? "⌫" : k}
-              </button>
-            ))}
-          </div>
-
           <button
             onClick={() => submit()}
-            disabled={!amount || !cat}
-            className="w-full rounded-2xl bg-foreground py-4 font-semibold text-background disabled:opacity-30 transition-opacity"
+            disabled={!amount || (!cat && !amount)}
+            className="w-full rounded-2xl bg-foreground py-4 font-semibold text-background disabled:opacity-30 transition-opacity flex items-center justify-center gap-2"
           >
-            Log expense
+            {amount ? `Log ₹${amount}` : "Waiting for amount..."}
           </button>
         </div>
       </SheetContent>

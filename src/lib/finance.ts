@@ -9,7 +9,13 @@ export const storage = {
   loadTx(): Transaction[] {
     try {
       const raw = localStorage.getItem(KEY_TX);
-      return raw ? (JSON.parse(raw) as Transaction[]) : [];
+      if (raw) {
+        const parsed = JSON.parse(raw) as Transaction[];
+        if (parsed.length > 0) return parsed;
+      }
+      const mock = getMockTransactions();
+      localStorage.setItem(KEY_TX, JSON.stringify(mock));
+      return mock;
     } catch { return []; }
   },
   saveTx(tx: Transaction[]) {
@@ -27,18 +33,44 @@ export const storage = {
   loadStart(): number {
     const raw = localStorage.getItem(KEY_START);
     if (raw) return Number(raw);
-    const now = Date.now();
+    const txRaw = localStorage.getItem(KEY_TX);
+    let now = Date.now();
+    if (txRaw) {
+      try {
+        if ((JSON.parse(txRaw)).length > 20) {
+          now = Date.now() - 45 * 86400000;
+        }
+      } catch {}
+    }
     localStorage.setItem(KEY_START, String(now));
     return now;
   },
   loadGoals(): any[] {
     try {
       const raw = localStorage.getItem(KEY_GOALS);
-      return raw ? JSON.parse(raw) : [];
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.length > 0) return parsed;
+      }
+      const mock = [
+        { id: uid(), name: "MacBook Pro", target: 120000, saved: 45000, deadlineMs: Date.now() + 90 * 86400000 },
+        { id: uid(), name: "Goa Trip", target: 25000, saved: 12000, deadlineMs: Date.now() + 30 * 86400000 },
+      ];
+      localStorage.setItem(KEY_GOALS, JSON.stringify(mock));
+      return mock;
     } catch { return []; }
   },
   saveGoals(goals: any[]) {
     localStorage.setItem(KEY_GOALS, JSON.stringify(goals));
+  },
+  loadBalance(): number {
+    try {
+      const raw = localStorage.getItem("paisa.balance.v1");
+      return raw ? Number(raw) : 0;
+    } catch { return 0; }
+  },
+  saveBalance(b: number) {
+    localStorage.setItem("paisa.balance.v1", String(b));
   },
   clearAll() {
     [KEY_TX, KEY_BM, KEY_START, KEY_GOALS, "paisa.balance.v1"].forEach((k) => localStorage.removeItem(k));
@@ -95,7 +127,7 @@ export function topCategory(tx: Transaction[]): { id: CategoryId; amount: number
   return best ? { id: best, amount: max } : null;
 }
 
-// ---- No-spend streak ----
+// ---- Awareness streak ----
 export function computeStreak(tx: Transaction[], startMs: number, today = new Date()): {
   current: number; best: number;
 } {
@@ -105,19 +137,28 @@ export function computeStreak(tx: Transaction[], startMs: number, today = new Da
   const spent = new Set<number>();
   tx.forEach((t) => spent.add(startOfDay(t.ts).getTime()));
 
-  // Walk backwards from yesterday (today doesn't count if no spend yet — be generous: count today if no spend)
+  // Walk backwards from yesterday (today counts if tracked, otherwise assume they might track later)
   let current = 0;
   let cursor = todayStart;
+  
+  // If they tracked today, include today. If not, start counting from yesterday.
+  if (spent.has(todayStart)) {
+    current++;
+    cursor -= 86400000;
+  } else {
+    cursor -= 86400000;
+  }
+
   while (cursor >= startDay) {
-    if (!spent.has(cursor)) current++;
+    if (spent.has(cursor)) current++;
     else break;
     cursor -= 86400000;
   }
 
-  // Best streak from start to today
+  // Best tracking streak
   let best = 0; let run = 0;
   for (let d = startDay; d <= todayStart; d += 86400000) {
-    if (!spent.has(d)) { run++; if (run > best) best = run; }
+    if (spent.has(d)) { run++; if (run > best) best = run; }
     else run = 0;
   }
   return { current, best };
@@ -238,3 +279,58 @@ export function fmt(n: number): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: n % 1 === 0 ? 0 : 2 }).format(n);
 }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// ---- Mock Data ----
+function getMockTransactions(): Transaction[] {
+  const tx: Transaction[] = [];
+  const now = Date.now();
+  const DAY = 86400000;
+  
+  const items = [
+    { cat: "food", note: "Lunch at cafe", amt: [120, 150, 200, 250], mood: "🍜" },
+    { cat: "food", note: "Dinner order", amt: [300, 450, 500, 280], mood: "🍕" },
+    { cat: "food", note: "Coffee", amt: [80, 100, 150], mood: "☕" },
+    { cat: "travel", note: "Uber to work", amt: [180, 220, 250], mood: "🚗" },
+    { cat: "travel", note: "Metro card recharge", amt: [500], mood: "🚇" },
+    { cat: "shopping", note: "Amazon", amt: [450, 890, 1200], mood: "📦" },
+    { cat: "shopping", note: "Myntra clothes", amt: [1500, 2200], mood: "👕" },
+    { cat: "shopping", note: "Groceries", amt: [600, 800, 1000], mood: "🛒" },
+    { cat: "random", note: "Movie tickets", amt: [350, 400], mood: "🎟️" },
+    { cat: "random", note: "Spotify subscription", amt: [119], mood: "🎵" },
+    { cat: "food", note: "Swiggy snack", amt: [150, 180], mood: "🍔" },
+    { cat: "travel", note: "Rapido ride", amt: [60, 90, 110], mood: "🛵" },
+  ];
+
+  for (let i = 0; i < 45; i++) { // span 45 days
+    const tsBase = now - i * DAY;
+    // skip a few days to make it look realistic (broken streaks)
+    if (i === 5 || i === 12 || i === 25 || i === 30) continue; 
+    
+    const numTx = Math.floor(Math.random() * 3) + 1;
+    for (let j = 0; j < numTx; j++) {
+      const item = items[Math.floor(Math.random() * items.length)];
+      const amount = item.amt[Math.floor(Math.random() * item.amt.length)];
+      const ts = tsBase - Math.floor(Math.random() * (DAY / 2));
+      tx.push({
+        id: uid(),
+        amount,
+        category: item.cat as CategoryId,
+        note: item.note,
+        mood: item.mood,
+        ts
+      });
+    }
+  }
+
+  // Ensure there's a transaction for today for "present"
+  tx.push({
+    id: uid(),
+    amount: 150,
+    category: "food",
+    note: "Morning Coffee",
+    mood: "☕",
+    ts: now - 3600000 // 1 hour ago
+  });
+
+  return tx.sort((a, b) => b.ts - a.ts);
+}
