@@ -9,13 +9,7 @@ export const storage = {
   loadTx(): Transaction[] {
     try {
       const raw = localStorage.getItem(KEY_TX);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Transaction[];
-        if (parsed.length > 0) return parsed;
-      }
-      const mock = getMockTransactions();
-      localStorage.setItem(KEY_TX, JSON.stringify(mock));
-      return mock;
+      return raw ? JSON.parse(raw) : [];
     } catch { return []; }
   },
   saveTx(tx: Transaction[]) {
@@ -33,31 +27,14 @@ export const storage = {
   loadStart(): number {
     const raw = localStorage.getItem(KEY_START);
     if (raw) return Number(raw);
-    const txRaw = localStorage.getItem(KEY_TX);
-    let now = Date.now();
-    if (txRaw) {
-      try {
-        if ((JSON.parse(txRaw)).length > 20) {
-          now = Date.now() - 45 * 86400000;
-        }
-      } catch {}
-    }
+    const now = Date.now();
     localStorage.setItem(KEY_START, String(now));
     return now;
   },
   loadGoals(): any[] {
     try {
       const raw = localStorage.getItem(KEY_GOALS);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.length > 0) return parsed;
-      }
-      const mock = [
-        { id: uid(), name: "MacBook Pro", target: 120000, saved: 45000, deadlineMs: Date.now() + 90 * 86400000 },
-        { id: uid(), name: "Goa Trip", target: 25000, saved: 12000, deadlineMs: Date.now() + 30 * 86400000 },
-      ];
-      localStorage.setItem(KEY_GOALS, JSON.stringify(mock));
-      return mock;
+      return raw ? JSON.parse(raw) : [];
     } catch { return []; }
   },
   saveGoals(goals: any[]) {
@@ -73,7 +50,7 @@ export const storage = {
     localStorage.setItem("paisa.balance.v1", String(b));
   },
   clearAll() {
-    [KEY_TX, KEY_BM, KEY_START, KEY_GOALS, "paisa.balance.v1"].forEach((k) => localStorage.removeItem(k));
+    [KEY_TX, KEY_BM, KEY_START, KEY_GOALS, "paisa.balance.v1", "paisa.people.v1", "paisa.lend.v1"].forEach((k) => localStorage.removeItem(k));
   },
 };
 
@@ -83,7 +60,7 @@ export function uid(): string {
 
 // ---- Date helpers ----
 export const startOfDay = (d: Date | number) => {
-  const x = new Date(d); x.setHours(0,0,0,0); return x;
+  const x = new Date(d); x.setHours(0, 0, 0, 0); return x;
 };
 export const isSameDay = (a: number, b: number) =>
   startOfDay(a).getTime() === startOfDay(b).getTime();
@@ -91,7 +68,7 @@ export const isSameDay = (a: number, b: number) =>
 export const startOfWeek = (d: Date | number) => {
   // Monday-start week
   const x = startOfDay(d);
-  const day = x.getDay(); // 0 Sun .. 6 Sat
+  const day = x.getDay();
   const diff = (day + 6) % 7;
   x.setDate(x.getDate() - diff);
   return x;
@@ -129,84 +106,43 @@ export function topCategory(tx: Transaction[]): { id: CategoryId; amount: number
 
 // ---- Awareness streak ----
 export function computeStreak(tx: Transaction[], startMs: number, today = new Date()): {
-  current: number; best: number;
+  current: number; best: number; trackedDays: number[];
 } {
   const todayStart = startOfDay(today).getTime();
   const startDay = startOfDay(startMs).getTime();
-  // Build set of days that had spending
+
   const spent = new Set<number>();
   tx.forEach((t) => spent.add(startOfDay(t.ts).getTime()));
 
-  // Walk backwards from yesterday (today counts if tracked, otherwise assume they might track later)
+  // Current streak (walk back from today)
   let current = 0;
   let cursor = todayStart;
-  
-  // If they tracked today, include today. If not, start counting from yesterday.
-  if (spent.has(todayStart)) {
-    current++;
-    cursor -= 86400000;
-  } else {
-    cursor -= 86400000;
-  }
-
+  if (spent.has(todayStart)) { current++; cursor -= 86400000; }
+  else { cursor -= 86400000; }
   while (cursor >= startDay) {
     if (spent.has(cursor)) current++;
     else break;
     cursor -= 86400000;
   }
 
-  // Best tracking streak
+  // Best streak ever
   let best = 0; let run = 0;
   for (let d = startDay; d <= todayStart; d += 86400000) {
     if (spent.has(d)) { run++; if (run > best) best = run; }
     else run = 0;
   }
-  return { current, best };
-}
 
-// ---- Weekly score (0-100) ----
-// Lower spending vs benchmarks = higher score. No-spend days bonus.
-export function weeklyScore(tx: Transaction[], benchmarks: Benchmarks, weekStart: Date = startOfWeek(new Date())): {
-  score: number;
-  breakdown: Record<CategoryId, { spent: number; budget: number; pct: number }>;
-  noSpendDays: number;
-} {
-  const weekStartMs = weekStart.getTime();
-  const weekEndMs = weekStartMs + 7 * 86400000;
-  const weekTx = txInRange(tx, weekStartMs, weekEndMs);
-  const totals = totalsByCategory(weekTx);
-
-  const breakdown = {} as Record<CategoryId, { spent: number; budget: number; pct: number }>;
-  let totalRatio = 0;
-  (Object.keys(benchmarks) as CategoryId[]).forEach((k) => {
-    const budget = benchmarks[k] * 7;
-    const spent = totals[k];
-    const pct = budget === 0 ? (spent > 0 ? 1.5 : 0) : spent / budget;
-    breakdown[k] = { spent, budget, pct };
-    totalRatio += Math.min(pct, 1.5);
-  });
-  const avgRatio = totalRatio / 4; // 0..1.5
-
-  // Base: 100 when at 0 spend, 60 when at budget, 0 when 1.5x+
-  let base = 100 - avgRatio * 60; // 100..10
-  base = Math.max(0, Math.min(100, base));
-
-  // Bonus: no-spend days this week
-  const today = startOfDay(new Date()).getTime();
-  const daysElapsed = Math.min(7, Math.floor((today - weekStartMs) / 86400000) + 1);
-  const spentDays = new Set<number>();
-  weekTx.forEach((t) => spentDays.add(startOfDay(t.ts).getTime()));
-  let noSpendDays = 0;
-  for (let i = 0; i < daysElapsed; i++) {
-    const d = weekStartMs + i * 86400000;
-    if (!spentDays.has(d)) noSpendDays++;
+  // Last 14 days for heatmap dots
+  const trackedDays: number[] = [];
+  for (let i = 13; i >= 0; i--) {
+    trackedDays.push(spent.has(todayStart - i * 86400000) ? 1 : 0);
   }
-  const bonus = Math.min(15, noSpendDays * 3);
-  return { score: Math.round(Math.max(0, Math.min(100, base + bonus))), breakdown, noSpendDays };
+
+  return { current, best, trackedDays };
 }
 
 // ---- Insight sentence ----
-export function insightSentence(tx: Transaction[], benchmarks: Benchmarks): string {
+export function insightSentence(tx: Transaction[]): string {
   const ws = startOfWeek(new Date());
   const week = txInRange(tx, ws.getTime(), ws.getTime() + 7 * 86400000);
   if (week.length === 0) return "Clean slate this week. Tap + to log your first expense.";
@@ -215,35 +151,8 @@ export function insightSentence(tx: Transaction[], benchmarks: Benchmarks): stri
   const total = week.reduce((s, t) => s + t.amount, 0);
   if (!top) return "Quiet week so far. Keep it up!";
   const pct = Math.round((totals[top.id] / total) * 100);
-
-  // Compare top category to its weekly budget
-  const budget = benchmarks[top.id] * 7;
-  const overBy = totals[top.id] - budget;
-  const cat = top.id;
-  if (overBy > 0 && budget > 0) {
-    return `${pct}% of your week went to ${cap(cat)} — ${fmt(overBy)} over your limit. Time to watch it.`;
-  }
-  if (budget > 0 && totals[top.id] / budget < 0.5) {
-    return `${cap(cat)} led your spending at ${pct}%, but you're still comfortably under your weekly limit. Nice.`;
-  }
-  return `${cap(cat)} took ${pct}% of your spending this week — ${fmt(totals[top.id])} of ${fmt(total)} total.`;
-}
-
-// ---- Spike detection ----
-// A transaction is a spike if it's > 2x the median amount for that category over last 30 days.
-export function spikes(tx: Transaction[]): Transaction[] {
-  const now = Date.now();
-  const cutoff = now - 30 * 86400000;
-  const recent = tx.filter((t) => t.ts >= cutoff);
-  const out: Transaction[] = [];
-  (["food","travel","shopping","random"] as CategoryId[]).forEach((cat) => {
-    const items = recent.filter((t) => t.category === cat).map((t) => t.amount).sort((a,b) => a - b);
-    if (items.length < 4) return;
-    const median = items[Math.floor(items.length / 2)];
-    const threshold = Math.max(median * 2.5, median + 20);
-    recent.filter((t) => t.category === cat && t.amount >= threshold).forEach((t) => out.push(t));
-  });
-  return out.sort((a,b) => b.ts - a.ts);
+  const catLabel = top.id.charAt(0).toUpperCase() + top.id.slice(1);
+  return `${catLabel} took ${pct}% of your spending this week — ${fmt(totals[top.id])} of ${fmt(total)} total.`;
 }
 
 // ---- NLP ----
@@ -268,7 +177,7 @@ export function runwayDays(balance: number, tx: Transaction[]): number | null {
   const cutoff = now - 14 * 86400000;
   const recent = tx.filter((t) => t.ts >= cutoff);
   if (recent.length === 0) return null;
-  const total = recent.reduce((s,t) => s + t.amount, 0);
+  const total = recent.reduce((s, t) => s + t.amount, 0);
   const perDay = total / 14;
   if (perDay <= 0) return null;
   return Math.floor(balance / perDay);
@@ -278,59 +187,22 @@ export function runwayDays(balance: number, tx: Transaction[]): number | null {
 export function fmt(n: number): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: n % 1 === 0 ? 0 : 2 }).format(n);
 }
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-// ---- Mock Data ----
-function getMockTransactions(): Transaction[] {
-  const tx: Transaction[] = [];
+// ---- Spike detection ----
+// A transaction is a spike if it's > 2.5x the median amount for that category over last 30 days.
+export function spikes(tx: Transaction[]): Transaction[] {
   const now = Date.now();
-  const DAY = 86400000;
-  
-  const items = [
-    { cat: "food", note: "Lunch at cafe", amt: [120, 150, 200, 250], mood: "🍜" },
-    { cat: "food", note: "Dinner order", amt: [300, 450, 500, 280], mood: "🍕" },
-    { cat: "food", note: "Coffee", amt: [80, 100, 150], mood: "☕" },
-    { cat: "travel", note: "Uber to work", amt: [180, 220, 250], mood: "🚗" },
-    { cat: "travel", note: "Metro card recharge", amt: [500], mood: "🚇" },
-    { cat: "shopping", note: "Amazon", amt: [450, 890, 1200], mood: "📦" },
-    { cat: "shopping", note: "Myntra clothes", amt: [1500, 2200], mood: "👕" },
-    { cat: "shopping", note: "Groceries", amt: [600, 800, 1000], mood: "🛒" },
-    { cat: "random", note: "Movie tickets", amt: [350, 400], mood: "🎟️" },
-    { cat: "random", note: "Spotify subscription", amt: [119], mood: "🎵" },
-    { cat: "food", note: "Swiggy snack", amt: [150, 180], mood: "🍔" },
-    { cat: "travel", note: "Rapido ride", amt: [60, 90, 110], mood: "🛵" },
-  ];
-
-  for (let i = 0; i < 45; i++) { // span 45 days
-    const tsBase = now - i * DAY;
-    // skip a few days to make it look realistic (broken streaks)
-    if (i === 5 || i === 12 || i === 25 || i === 30) continue; 
-    
-    const numTx = Math.floor(Math.random() * 3) + 1;
-    for (let j = 0; j < numTx; j++) {
-      const item = items[Math.floor(Math.random() * items.length)];
-      const amount = item.amt[Math.floor(Math.random() * item.amt.length)];
-      const ts = tsBase - Math.floor(Math.random() * (DAY / 2));
-      tx.push({
-        id: uid(),
-        amount,
-        category: item.cat as CategoryId,
-        note: item.note,
-        mood: item.mood,
-        ts
-      });
-    }
-  }
-
-  // Ensure there's a transaction for today for "present"
-  tx.push({
-    id: uid(),
-    amount: 150,
-    category: "food",
-    note: "Morning Coffee",
-    mood: "☕",
-    ts: now - 3600000 // 1 hour ago
+  const cutoff = now - 30 * 86400000;
+  const recent = tx.filter((t) => t.ts >= cutoff);
+  const out: Transaction[] = [];
+  (["food","travel","shopping","random"] as CategoryId[]).forEach((cat) => {
+    const items = recent.filter((t) => t.category === cat).map((t) => t.amount).sort((a,b) => a - b);
+    if (items.length < 4) return;
+    const median = items[Math.floor(items.length / 2)];
+    const threshold = Math.max(median * 2.5, median + 20);
+    recent.filter((t) => t.category === cat && t.amount >= threshold).forEach((t) => out.push(t));
   });
-
-  return tx.sort((a, b) => b.ts - a.ts);
+  return out.sort((a,b) => b.ts - a.ts);
 }
+
+export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

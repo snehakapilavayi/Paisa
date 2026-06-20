@@ -20,9 +20,9 @@
     --primary: 220 25% 12%;
     --primary-foreground: 40 33% 96%;
 
-    /* Accent — electric lime */
-    --accent: 75 85% 55%;
-    --accent-foreground: 220 25% 12%;
+    /* Accent — sophisticated emerald green */
+    --accent: 142 72% 43%;
+    --accent-foreground: 40 33% 96%;
 
     --secondary: 40 20% 92%;
     --secondary-foreground: 220 25% 12%;
@@ -35,7 +35,7 @@
 
     --border: 40 15% 86%;
     --input: 40 15% 86%;
-    --ring: 75 85% 55%;
+    --ring: 142 72% 43%;
 
     /* Category palette */
     --cat-food: 18 80% 58%;
@@ -55,7 +55,7 @@
     --shadow-lift: 0 2px 4px hsl(220 25% 12% / 0.06), 0 24px 48px -16px hsl(220 25% 12% / 0.18);
 
     /* Gradients */
-    --gradient-paper: radial-gradient(1200px 600px at 80% -10%, hsl(75 85% 55% / 0.10), transparent 60%),
+    --gradient-paper: radial-gradient(1200px 600px at 80% -10%, hsl(142 72% 43% / 0.10), transparent 60%),
                       radial-gradient(900px 500px at -10% 110%, hsl(200 70% 48% / 0.06), transparent 60%);
   }
 
@@ -72,13 +72,13 @@
     --secondary-foreground: 40 33% 96%;
     --muted: 220 18% 16%;
     --muted-foreground: 220 10% 65%;
-    --accent: 75 85% 55%;
+    --accent: 142 72% 45%;
     --accent-foreground: 220 25% 12%;
     --destructive: 8 78% 55%;
     --destructive-foreground: 40 33% 96%;
     --border: 220 18% 18%;
     --input: 220 18% 18%;
-    --ring: 75 85% 55%;
+    --ring: 142 72% 45%;
   }
 }
 

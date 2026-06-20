@@ -7,12 +7,12 @@ import { StoryCard } from "@/components/StoryCard";
 import { QuickLog } from "@/components/QuickLog";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { Analytics } from "@/components/Analytics";
-import { Budgets } from "@/components/Budgets";
+import { Savings } from "@/components/Savings";
 import { BalanceCard } from "@/components/BalanceCard";
 import { FriendsDashboard } from "@/components/friends/FriendsDashboard";
-import { Home, PieChart, Target, Users } from "lucide-react";
+import { Home, PieChart, PiggyBank, Users } from "lucide-react";
 
-type Tab = "home" | "analytics" | "budgets" | "friends";
+type Tab = "home" | "analytics" | "savings" | "friends";
 
 const Index = () => {
   const api = useTransactions();
@@ -50,7 +50,7 @@ const Index = () => {
               </>
             )}
             {tab === "analytics" && <Analytics api={api} />}
-            {tab === "budgets" && <Budgets api={api} />}
+            {tab === "savings" && <Savings api={api} />}
             {tab === "friends" && <FriendsDashboard api={friendsApi} />}
           </div>
         </div>
@@ -76,11 +76,11 @@ const Index = () => {
           <span className="nav-label">Insights</span>
         </button>
         <button
-          className={`nav-tab ${tab === "budgets" ? "active" : ""}`}
-          onClick={() => setTab("budgets")}
+          className={`nav-tab ${tab === "savings" ? "active" : ""}`}
+          onClick={() => setTab("savings")}
         >
-          <div className="nav-icon-wrap"><Target className="w-5 h-5" /></div>
-          <span className="nav-label">Goals</span>
+          <div className="nav-icon-wrap"><PiggyBank className="w-5 h-5" /></div>
+          <span className="nav-label">Savings</span>
         </button>
         <button
           className={`nav-tab ${tab === "friends" ? "active" : ""}`}
